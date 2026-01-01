@@ -46,3 +46,6 @@ wp-config.php
 # Note: If you wish to whitelist themes,
 # uncomment the next line
 #/wp-content/themes
+
+# Release packages - regenerate with prepare-submission.sh
+release/
