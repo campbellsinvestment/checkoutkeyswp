@@ -130,35 +130,35 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
 ?>
 
 <div class="wrap">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+    <div class="checkoutkeys-header">
+        <h1>
             <img src="<?php echo esc_url(plugins_url('assets/favicon.ico', dirname(__FILE__))); ?>" alt="CheckoutKeys" style="width: 24px; height: 24px;">
             <?php esc_html_e('License Keys', 'checkoutkeys'); ?>
             <?php if (!empty($api_key)) : ?>
-                <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #46b450; background: #ecf7ed; padding: 4px 10px; border-radius: 12px; font-weight: normal;">
-                    <span style="width: 8px; height: 8px; background: #46b450; border-radius: 50%; display: inline-block;"></span>
+                <span class="connection-status connected">
+                    <span class="connection-status-dot"></span>
                     Connected
                 </span>
             <?php else : ?>
-                <span style="display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: #dc3232; background: #fef0f0; padding: 4px 10px; border-radius: 12px; font-weight: normal;">
-                    <span style="width: 8px; height: 8px; background: #dc3232; border-radius: 50%; display: inline-block;"></span>
+                <span class="connection-status disconnected">
+                    <span class="connection-status-dot"></span>
                     Not Connected
                 </span>
             <?php endif; ?>
-            <?php if (true) : // Re-enabled - API endpoint now available at /api/licenses ?>
-            <form method="post" action="" style="display: inline-block; margin-left: 10px;">
-                <?php wp_nonce_field('checkoutkeys_sync'); ?>
-                <button type="submit" name="checkoutkeys_sync" class="page-title-action" <?php echo $upgrade_required ? 'disabled style="opacity: 0.5; cursor: not-allowed;" title="Upgrade required to sync more licenses"' : ''; ?>>
-                    <?php esc_html_e('Sync from checkoutkeys.com', 'checkoutkeys'); ?>
-                </button>
-            </form>
-            <?php endif; ?>
         </h1>
+        <?php if (true) : // Re-enabled - API endpoint now available at /api/licenses ?>
+        <form method="post" action="" class="sync-form">
+            <?php wp_nonce_field('checkoutkeys_sync'); ?>
+            <button type="submit" name="checkoutkeys_sync" class="page-title-action" <?php echo $upgrade_required ? 'disabled style="opacity: 0.5; cursor: not-allowed;" title="Upgrade required to sync more licenses"' : ''; ?>>
+                <?php esc_html_e('Sync from checkoutkeys.com', 'checkoutkeys'); ?>
+            </button>
+        </form>
+        <?php endif; ?>
         <?php 
         $last_sync = get_option('checkoutkeys_last_sync');
         if ($last_sync) :
         ?>
-        <span style="font-size: 13px; color: #666;">
+        <span style="font-size: 13px; color: #666; margin-left: auto;">
             <?php 
             printf(
                 esc_html__('Last synced: %s', 'checkoutkeys'),
@@ -180,8 +180,8 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
     
     if ($upgrade_required && $subscription_data) :
     ?>
-    <div id="checkoutkeys-upgrade-banner" style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px 15px; margin: 20px 0; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #856404;">
+    <div id="checkoutkeys-upgrade-banner" class="checkoutkeys-alert checkoutkeys-alert-warning">
+        <p style="margin: 0;">
             <?php if ($show_sync_message) : ?>
                 <?php 
                 $license_word = ($synced_count === 1) ? 'license' : 'licenses';
@@ -204,8 +204,8 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
     <?php elseif ($show_sync_message) : 
         $license_word = ($synced_count === 1) ? 'license' : 'licenses';
     ?>
-    <div style="background: #d4edda; border-left: 4px solid #46b450; padding: 12px 15px; margin: 20px 0; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
-        <p style="margin: 0; font-size: 14px; color: #155724;">
+    <div class="checkoutkeys-alert checkoutkeys-alert-success">
+        <p style="margin: 0;">
             <?php printf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com', 'checkoutkeys'), $synced_count); ?>
         </p>
     </div>
@@ -247,12 +247,12 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
     
     <?php if ($subscription_data && isset($subscription_data['plan'])) : ?>
     <!-- Plan Card - Full Width -->
-    <div style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin: 20px 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
-            <div style="flex: 1; min-width: 250px;">
-                <h3 style="color: #23282d; font-size: 14px; margin: 0 0 10px 0; opacity: 0.7;"><?php esc_html_e('Current Plan', 'checkoutkeys'); ?></h3>
-                <p style="font-size: 28px; font-weight: bold; margin: 0; color: #0073aa;"><?php echo esc_html($subscription_data['plan']['name']); ?></p>
-                <p style="font-size: 14px; margin: 10px 0 0 0; color: #666;">
+    <div class="checkoutkeys-stats">
+        <div class="checkoutkeys-stats-grid">
+            <div class="checkoutkeys-stat-item">
+                <h3 class="checkoutkeys-stat-label"><?php esc_html_e('Current Plan', 'checkoutkeys'); ?></h3>
+                <p class="checkoutkeys-stat-value"><?php echo esc_html($subscription_data['plan']['name']); ?></p>
+                <p class="checkoutkeys-stat-sublabel">
                     <?php 
                     if ($subscription_data['plan']['price'] > 0) {
                         printf(esc_html__('$%d/month', 'checkoutkeys'), intval($subscription_data['plan']['price']));
@@ -260,8 +260,8 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
                     ?>
                 </p>
             </div>
-            <div style="flex: 2; min-width: 300px;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+            <div class="checkoutkeys-stat-item">
+                <h3 class="checkoutkeys-stat-label">
                     <?php 
                     if ($subscription_data['plan']['price'] > 0) {
                         esc_html_e('Usage', 'checkoutkeys');
@@ -269,12 +269,12 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
                         esc_html_e('This Month\'s Usage', 'checkoutkeys');
                     }
                     ?>
-                </div>
-                <div style="font-size: 16px; font-weight: bold; color: #23282d; margin-bottom: 8px;">
+                </h3>
+                <div class="checkoutkeys-usage-count">
                     <?php echo esc_html($subscription_data['licenseKeysCount']); ?> / <?php echo esc_html($subscription_data['plan']['limit']); ?>
                     <span style="font-size: 12px; font-weight: normal; color: #666;"><?php esc_html_e('keys', 'checkoutkeys'); ?></span>
                 </div>
-                <div style="width: 100%; height: 8px; background: #f0f0f1; border-radius: 4px; overflow: hidden;">
+                <div class="checkoutkeys-usage-bar">
                     <?php 
                     $usage_pct = intval($subscription_data['usagePercentage']);
                     $bar_color = '#0073aa'; // WordPress blue
@@ -285,11 +285,11 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
                     }
                     $bar_width = min(100, $usage_pct);
                     ?>
-                    <div style="height: 100%; background: <?php echo esc_attr($bar_color); ?>; border-radius: 4px; width: <?php echo esc_attr($bar_width); ?>%;"></div>
+                    <div class="checkoutkeys-usage-bar-fill" style="background: <?php echo esc_attr($bar_color); ?>; width: <?php echo esc_attr($bar_width); ?>%;"></div>
                 </div>
             </div>
             <?php if ($subscription_data['plan']['name'] === 'Free' || $subscription_data['usagePercentage'] >= 80) : ?>
-            <div>
+            <div style="margin-left: auto;">
                 <a href="https://checkoutkeys.com/pricing" target="_blank" class="button button-primary">
                     <?php esc_html_e('Upgrade Plan', 'checkoutkeys'); ?>
                 </a>
@@ -323,7 +323,7 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
                     <?php esc_html_e('Recent Sales', 'checkoutkeys'); ?>
                     <span style="font-size: 11px; color: #666; font-weight: normal;">[Last 30 Days]</span>
                 </h3>
-                <p style="font-size: 24px; font-weight: bold; margin: 10px 0;">
+                <p style="font-size: 32px; font-weight: bold; margin: 10px 0;">
                     <?php 
                     $recent = 0;
                     $now = current_time('timestamp');
@@ -341,40 +341,41 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
         </div>
     </div>
     
-    <table class="wp-list-table widefat fixed striped">
+    <div class="wp-list-table-wrapper">
+    <table class="wp-list-table widefat fixed striped license-keys">
         <thead>
             <tr>
-                <th style="width: 20%;"><?php esc_html_e('License Key', 'checkoutkeys'); ?></th>
-                <th style="width: 18%;"><?php esc_html_e('Customer', 'checkoutkeys'); ?></th>
-                <th style="width: 10%;"><?php esc_html_e('Status', 'checkoutkeys'); ?></th>
-                <th style="width: 14%;"><?php esc_html_e('Created At', 'checkoutkeys'); ?></th>
-                <th style="width: 14%;"><?php esc_html_e('Updated At', 'checkoutkeys'); ?></th>
-                <th style="width: 14%;"><?php esc_html_e('Email Sent At', 'checkoutkeys'); ?></th>
-                <th style="width: 10%; text-align: right;"><?php esc_html_e('Actions', 'checkoutkeys'); ?></th>
+                <th class="column-license-key" style="width: 20%;"><?php esc_html_e('License Key', 'checkoutkeys'); ?></th>
+                <th class="column-email" style="width: 18%;"><?php esc_html_e('Customer', 'checkoutkeys'); ?></th>
+                <th class="column-status" style="width: 10%;"><?php esc_html_e('Status', 'checkoutkeys'); ?></th>
+                <th class="column-created" style="width: 14%;"><?php esc_html_e('Created At', 'checkoutkeys'); ?></th>
+                <th class="column-updated" style="width: 14%;"><?php esc_html_e('Updated At', 'checkoutkeys'); ?></th>
+                <th class="column-email-sent" style="width: 14%;"><?php esc_html_e('Email Sent At', 'checkoutkeys'); ?></th>
+                <th class="column-actions" style="width: 10%; text-align: right;"><?php esc_html_e('Actions', 'checkoutkeys'); ?></th>
             </tr>
         </thead>
         <tbody>
             <?php if (!empty($licenses)) : ?>
                 <?php foreach ($licenses as $license) : ?>
                     <tr>
-                        <td>
-                            <code style="cursor: pointer; position: relative; padding-right: 25px; display: block; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                        <td class="column-license-key">
+                            <code class="license-key-display" style="cursor: pointer; position: relative; padding-right: 25px; display: block; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
                                   onclick="copyToClipboard('<?php echo esc_js($license->license_key); ?>', this)"
                                   title="<?php echo esc_attr($license->license_key); ?> - Click to copy">
                                 <?php echo esc_html(substr($license->license_key, 0, 30) . '...'); ?>
                                 <span class="dashicons dashicons-clipboard" style="font-size: 14px; position: absolute; right: 5px; top: 50%; transform: translateY(-50%);"></span>
                             </code>
                         </td>
-                        <td style="word-break: break-word;"><?php echo esc_html($license->customer_email); ?></td>
-                        <td>
-                            <span class="license-status status-<?php echo esc_attr($license->status); ?>">
+                        <td class="column-email" style="word-break: break-word;"><?php echo esc_html($license->customer_email); ?></td>
+                        <td class="column-status">
+                            <span class="license-status <?php echo ($license->status === 'active') ? 'active' : 'inactive'; ?>">
                                 <?php echo esc_html(ucfirst($license->status)); ?>
                             </span>
                         </td>
-                        <td><?php echo ($license->created_at && strtotime($license->created_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->created_at))) : '<span style="color: #999;">—</span>'; ?></td>
-                        <td><?php echo (property_exists($license, 'updated_at') && $license->updated_at && strtotime($license->updated_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->updated_at))) : '<span style="color: #999;">—</span>'; ?></td>
-                        <td><?php echo (property_exists($license, 'email_sent_at') && $license->email_sent_at && strtotime($license->email_sent_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->email_sent_at))) : '<span style="color: #999;">—</span>'; ?></td>
-                        <td style="text-align: right;">
+                        <td class="column-created"><?php echo ($license->created_at && strtotime($license->created_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->created_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td class="column-updated"><?php echo (property_exists($license, 'updated_at') && $license->updated_at && strtotime($license->updated_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->updated_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td class="column-email-sent"><?php echo (property_exists($license, 'email_sent_at') && $license->email_sent_at && strtotime($license->email_sent_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->email_sent_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td class="column-actions" style="text-align: right;">
                             <button type="button" 
                                     class="button button-small toggle-license-btn <?php echo ($license->status === 'active') ? 'deactivate-btn' : 'activate-btn'; ?>"
                                     data-license-key="<?php echo esc_attr($license->license_key); ?>"
@@ -392,6 +393,7 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
             <?php endif; ?>
         </tbody>
     </table>
+    </div>
 </div>
 
 <script>

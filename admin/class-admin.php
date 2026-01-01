@@ -27,6 +27,29 @@ class CheckoutKeys_Admin {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
         add_action('wp_ajax_checkoutkeys_toggle_license', array($this, 'ajax_toggle_license'));
+        add_action('admin_notices', array($this, 'hide_other_notices'), 1);
+    }
+    
+    /**
+     * Hide other plugin notices on CheckoutKeys admin pages
+     */
+    public function hide_other_notices() {
+        // Only hide notices on our plugin pages
+        $screen = get_current_screen();
+        if ($screen && strpos($screen->id, 'checkoutkeys') !== false) {
+            remove_all_actions('admin_notices');
+            remove_all_actions('all_admin_notices');
+            
+            // Re-add our own notices hook if we need it later
+            add_action('admin_notices', array($this, 'show_checkoutkeys_notices'));
+        }
+    }
+    
+    /**
+     * Show only CheckoutKeys-specific notices
+     */
+    public function show_checkoutkeys_notices() {
+        // Reserved for future CheckoutKeys-specific notices
     }
     
     public function ajax_toggle_license() {
