@@ -110,7 +110,7 @@ $api_key = get_option('checkoutkeys_api_key');
                 </p>
             </div>
         <?php else : ?>
-            <?php if ($last_sync) : ?>
+            <?php if ($last_sync && strtotime($last_sync) !== false) : ?>
                 <p>
                     <strong><?php esc_html_e('Last sync:', 'checkoutkeys'); ?></strong>
                     <?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($last_sync))); ?>

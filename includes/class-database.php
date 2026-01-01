@@ -101,11 +101,25 @@ class CheckoutKeys_Database {
     public function insert_license($data) {
         global $wpdb;
         
+        // Dynamic format array based on the data being inserted
+        $formats = array();
+        foreach ($data as $value) {
+            if (is_int($value)) {
+                $formats[] = '%d';
+            } else {
+                $formats[] = '%s';
+            }
+        }
+        
         $result = $wpdb->insert(
             $this->license_table,
             $data,
-            array('%s', '%d', '%s', '%d', '%s', '%d', '%d', '%s', '%s')
+            $formats
         );
+        
+        if ($result === false) {
+            error_log('CheckoutKeys Insert Error: ' . $wpdb->last_error);
+        }
         
         return $result ? $wpdb->insert_id : false;
     }

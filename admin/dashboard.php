@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
 // Get API key for connection status
 $api_key = get_option('checkoutkeys_api_key');
 
-// Handle sync action
+// Handle sync action BEFORE any output
 if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync')) {
     $api_url = 'https://checkoutkeys.com/api';
     
@@ -38,26 +38,39 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
                     // Check if license already exists
                     $existing = $db->get_license_by_key($license_data['key']);
                     
+                    // Helper function to safely convert timestamps
+                    $convert_timestamp = function($timestamp) {
+                        if (empty($timestamp)) return null;
+                        $time = strtotime($timestamp);
+                        if ($time === false || $time < 0) return null;
+                        return date('Y-m-d H:i:s', $time);
+                    };
+                    
+                    $created_at = $convert_timestamp($license_data['created_at'] ?? null);
+                    $updated_at = $convert_timestamp($license_data['updated_at'] ?? null);
+                    $email_sent_at = $convert_timestamp($license_data['email_sent_at'] ?? null);
+                    
                     // For insert operations
                     $license_array_with_key = array(
                         'license_key' => $license_data['key'],
-                        'customer_email' => $license_data['email'],
+                        'customer_email' => !empty($license_data['email']) ? $license_data['email'] : null,
                         'status' => $license_data['status'],
                         'max_activations' => intval($license_data['max_activations'] ?? 1),
                         'activation_count' => 0,
                         'activated_domains' => '',
-                        'created_at' => isset($license_data['created_at']) ? date('Y-m-d H:i:s', strtotime($license_data['created_at'])) : current_time('mysql'),
-                        'updated_at' => isset($license_data['updated_at']) ? date('Y-m-d H:i:s', strtotime($license_data['updated_at'])) : current_time('mysql'),
-                        'email_sent_at' => isset($license_data['email_sent_at']) && $license_data['email_sent_at'] ? date('Y-m-d H:i:s', strtotime($license_data['email_sent_at'])) : null,
+                        'created_at' => $created_at ?: current_time('mysql'),
+                        'updated_at' => $updated_at ?: current_time('mysql'),
+                        'email_sent_at' => $email_sent_at,
                     );
                     
                     // For update operations (exclude license_key from data array)
                     $license_array_no_key = array(
-                        'customer_email' => $license_data['email'],
+                        'customer_email' => !empty($license_data['email']) ? $license_data['email'] : null,
                         'status' => $license_data['status'],
                         'max_activations' => intval($license_data['max_activations'] ?? 1),
-                        'updated_at' => isset($license_data['updated_at']) ? date('Y-m-d H:i:s', strtotime($license_data['updated_at'])) : current_time('mysql'),
-                        'email_sent_at' => isset($license_data['email_sent_at']) && $license_data['email_sent_at'] ? date('Y-m-d H:i:s', strtotime($license_data['email_sent_at'])) : null,
+                        'created_at' => $created_at ?: current_time('mysql'),
+                        'updated_at' => $updated_at ?: current_time('mysql'),
+                        'email_sent_at' => $email_sent_at,
                     );
                     
                     if ($existing) {
@@ -71,11 +84,15 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
                 }
                 
                 update_option('checkoutkeys_last_sync', current_time('mysql'));
-                $license_word = ($synced === 1) ? 'license' : 'licenses';
-                echo '<div class="notice notice-success is-dismissible" id="checkoutkeys-sync-notice"><p>' . 
-                     sprintf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com', 'checkoutkeys'), $synced) . 
-                     '</p></div>';
-                echo '<script>setTimeout(function(){ var notice = document.getElementById("checkoutkeys-sync-notice"); if(notice) notice.style.display = "none"; }, 5000);</script>';
+                
+                // Set transient for success message
+                set_transient('checkoutkeys_sync_success', $synced, 30);
+                
+                // JavaScript redirect to avoid output buffer issues
+                echo '<script type="text/javascript">window.location.href = "' . 
+                     esc_url(admin_url('admin.php?page=checkoutkeys')) . 
+                     '";</script>';
+                exit;
             } else {
                 echo '<div class="notice notice-error"><p>' . 
                      esc_html__('Invalid response from API. Status: ', 'checkoutkeys') . $status_code . 
@@ -88,6 +105,16 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
     } else {
         echo '<div class="notice notice-error"><p>' . esc_html__('API key not configured', 'checkoutkeys') . '</p></div>';
     }
+}
+
+// Display sync success message if redirected with success
+$synced_count = get_transient('checkoutkeys_sync_success');
+if ($synced_count !== false) {
+    delete_transient('checkoutkeys_sync_success');
+    $license_word = ($synced_count === 1) ? 'license' : 'licenses';
+    echo '<div class="notice notice-success is-dismissible"><p>' . 
+         sprintf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com', 'checkoutkeys'), $synced_count) . 
+         '</p></div>';
 }
 ?>
 
@@ -296,12 +323,12 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
     <table class="wp-list-table widefat fixed striped">
         <thead>
             <tr>
-                <th style="width: 15%;"><?php esc_html_e('License Key', 'checkoutkeys'); ?></th>
-                <th style="width: 20%;"><?php esc_html_e('Customer', 'checkoutkeys'); ?></th>
+                <th style="width: 20%;"><?php esc_html_e('License Key', 'checkoutkeys'); ?></th>
+                <th style="width: 18%;"><?php esc_html_e('Customer', 'checkoutkeys'); ?></th>
                 <th style="width: 10%;"><?php esc_html_e('Status', 'checkoutkeys'); ?></th>
-                <th style="width: 15%;"><?php esc_html_e('Created At', 'checkoutkeys'); ?></th>
-                <th style="width: 15%;"><?php esc_html_e('Updated At', 'checkoutkeys'); ?></th>
-                <th style="width: 15%;"><?php esc_html_e('Email Sent At', 'checkoutkeys'); ?></th>
+                <th style="width: 14%;"><?php esc_html_e('Created At', 'checkoutkeys'); ?></th>
+                <th style="width: 14%;"><?php esc_html_e('Updated At', 'checkoutkeys'); ?></th>
+                <th style="width: 14%;"><?php esc_html_e('Email Sent At', 'checkoutkeys'); ?></th>
                 <th style="width: 10%; text-align: right;"><?php esc_html_e('Actions', 'checkoutkeys'); ?></th>
             </tr>
         </thead>
@@ -310,22 +337,22 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
                 <?php foreach ($licenses as $license) : ?>
                     <tr>
                         <td>
-                            <code style="cursor: pointer; position: relative; padding-right: 25px;" 
+                            <code style="cursor: pointer; position: relative; padding-right: 25px; display: block; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
                                   onclick="copyToClipboard('<?php echo esc_js($license->license_key); ?>', this)"
-                                  title="Click to copy">
-                                <?php echo esc_html(substr($license->license_key, 0, 20) . '...'); ?>
+                                  title="<?php echo esc_attr($license->license_key); ?> - Click to copy">
+                                <?php echo esc_html(substr($license->license_key, 0, 30) . '...'); ?>
                                 <span class="dashicons dashicons-clipboard" style="font-size: 14px; position: absolute; right: 5px; top: 50%; transform: translateY(-50%);"></span>
                             </code>
                         </td>
-                        <td><?php echo esc_html($license->customer_email); ?></td>
+                        <td style="word-break: break-word;"><?php echo esc_html($license->customer_email); ?></td>
                         <td>
                             <span class="license-status status-<?php echo esc_attr($license->status); ?>">
                                 <?php echo esc_html(ucfirst($license->status)); ?>
                             </span>
                         </td>
-                        <td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->created_at))); ?></td>
-                        <td><?php echo (property_exists($license, 'updated_at') && $license->updated_at) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->updated_at))) : '<span style="color: #999;">—</span>'; ?></td>
-                        <td><?php echo (property_exists($license, 'email_sent_at') && $license->email_sent_at) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->email_sent_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td><?php echo ($license->created_at && strtotime($license->created_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->created_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td><?php echo (property_exists($license, 'updated_at') && $license->updated_at && strtotime($license->updated_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->updated_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td><?php echo (property_exists($license, 'email_sent_at') && $license->email_sent_at && strtotime($license->email_sent_at) !== false) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->email_sent_at))) : '<span style="color: #999;">—</span>'; ?></td>
                         <td style="text-align: right;">
                             <button type="button" 
                                     class="button button-small toggle-license-btn <?php echo ($license->status === 'active') ? 'deactivate-btn' : 'activate-btn'; ?>"
