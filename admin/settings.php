@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
 // Save settings
 if (isset($_POST['checkoutkeys_save_settings']) && check_admin_referer('checkoutkeys_settings')) {
     $api_key = sanitize_text_field($_POST['checkoutkeys_api_key']);
-    $api_url = esc_url_raw($_POST['checkoutkeys_api_url']);
+    $api_url = isset($_POST['checkoutkeys_api_url']) ? esc_url_raw($_POST['checkoutkeys_api_url']) : 'https://checkoutkeys.com/api';
     
     // Validate API key before saving
     if (!empty($api_key)) {
