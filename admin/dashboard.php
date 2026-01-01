@@ -107,15 +107,26 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
     }
 }
 
-// Display sync success message if redirected with success
-$synced_count = get_transient('checkoutkeys_sync_success');
-if ($synced_count !== false) {
-    delete_transient('checkoutkeys_sync_success');
-    $license_word = ($synced_count === 1) ? 'license' : 'licenses';
-    echo '<div class="notice notice-success is-dismissible"><p>' . 
-         sprintf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com', 'checkoutkeys'), $synced_count) . 
-         '</p></div>';
+// Fetch subscription status from CheckoutKeys API (moved here to check upgrade before rendering)
+$api_key = get_option('checkoutkeys_api_key');
+$subscription_data = null;
+if (!empty($api_key)) {
+    $api_url = 'https://checkoutkeys.com/api';
+    $response = wp_remote_get($api_url . '/subscription/status', array(
+        'headers' => array(
+            'Authorization' => 'Bearer ' . $api_key,
+        ),
+        'timeout' => 15,
+    ));
+    
+    if (!is_wp_error($response)) {
+        $body = wp_remote_retrieve_body($response);
+        $subscription_data = json_decode($body, true);
+    }
 }
+
+// Check if upgrade is required
+$upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequired']) && $subscription_data['upgradeRequired']);
 ?>
 
 <div class="wrap">
@@ -137,7 +148,7 @@ if ($synced_count !== false) {
             <?php if (true) : // Re-enabled - API endpoint now available at /api/licenses ?>
             <form method="post" action="" style="display: inline-block; margin-left: 10px;">
                 <?php wp_nonce_field('checkoutkeys_sync'); ?>
-                <button type="submit" name="checkoutkeys_sync" class="page-title-action">
+                <button type="submit" name="checkoutkeys_sync" class="page-title-action" <?php echo $upgrade_required ? 'disabled style="opacity: 0.5; cursor: not-allowed;" title="Upgrade required to sync more licenses"' : ''; ?>>
                     <?php esc_html_e('Sync from checkoutkeys.com', 'checkoutkeys'); ?>
                 </button>
             </form>
@@ -159,25 +170,48 @@ if ($synced_count !== false) {
     </div>
     
     <?php
-    $api_key = get_option('checkoutkeys_api_key');
+    // Show upgrade warning (either after sync or persistent)
+    $synced_count = get_transient('checkoutkeys_sync_success');
+    $show_sync_message = ($synced_count !== false);
     
-    // Fetch subscription status from CheckoutKeys API
-    $subscription_data = null;
-    if (!empty($api_key)) {
-        $api_url = 'https://checkoutkeys.com/api';
-        $response = wp_remote_get($api_url . '/subscription/status', array(
-            'headers' => array(
-                'Authorization' => 'Bearer ' . $api_key,
-            ),
-            'timeout' => 15,
-        ));
-        
-        if (!is_wp_error($response)) {
-            $body = wp_remote_retrieve_body($response);
-            $subscription_data = json_decode($body, true);
-        }
+    if ($show_sync_message) {
+        delete_transient('checkoutkeys_sync_success');
     }
     
+    if ($upgrade_required && $subscription_data) :
+    ?>
+    <div id="checkoutkeys-upgrade-banner" style="background: #fff3cd; border-left: 4px solid #dc3545; padding: 12px 15px; margin: 20px 0; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #856404;">
+            <?php if ($show_sync_message) : ?>
+                <?php 
+                $license_word = ($synced_count === 1) ? 'license' : 'licenses';
+                printf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com. ', 'checkoutkeys'), $synced_count);
+                ?>
+            <?php endif; ?>
+            <strong style="color: #dc3545;">⚠️ <?php esc_html_e('Upgrade Required:', 'checkoutkeys'); ?></strong>
+            <?php 
+            printf(
+                esc_html__('You\'ve reached the limit of your %s plan (%d license keys). Sync is disabled until you upgrade.', 'checkoutkeys'),
+                esc_html($subscription_data['plan']['name']),
+                intval($subscription_data['plan']['limit'])
+            );
+            ?>
+            <a href="https://checkoutkeys.com/pricing" target="_blank" class="button button-primary" style="margin-left: 10px; vertical-align: middle;">
+                <?php esc_html_e('Upgrade Now', 'checkoutkeys'); ?>
+            </a>
+        </p>
+    </div>
+    <?php elseif ($show_sync_message) : 
+        $license_word = ($synced_count === 1) ? 'license' : 'licenses';
+    ?>
+    <div style="background: #d4edda; border-left: 4px solid #46b450; padding: 12px 15px; margin: 20px 0; box-shadow: 0 1px 1px rgba(0,0,0,.04);">
+        <p style="margin: 0; font-size: 14px; color: #155724;">
+            <?php printf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com', 'checkoutkeys'), $synced_count); ?>
+        </p>
+    </div>
+    <?php endif; ?>
+    
+    <?php
     if (empty($api_key)) :
     ?>
     <div class="notice notice-warning">
@@ -191,27 +225,8 @@ if ($synced_count !== false) {
     <?php endif; ?>
     
     <?php
-    // Show upgrade notice if required
-    if ($subscription_data && isset($subscription_data['upgradeRequired']) && $subscription_data['upgradeRequired']) :
-    ?>
-    <div class="notice notice-error" style="border-left-color: #f0ad4e;">
-        <p>
-            <strong><?php esc_html_e('⚠️ Upgrade Required', 'checkoutkeys'); ?></strong><br>
-            <?php 
-            printf(
-                esc_html__('You\'ve reached the limit of your current %s plan (%d license keys). ', 'checkoutkeys'),
-                esc_html($subscription_data['plan']['name']),
-                intval($subscription_data['plan']['limit'])
-            );
-            ?>
-            <a href="https://checkoutkeys.com/pricing" target="_blank" class="button button-primary" style="margin-left: 10px;">
-                <?php esc_html_e('Upgrade Now', 'checkoutkeys'); ?>
-            </a>
-        </p>
-    </div>
-    <?php 
     // Show approaching limit warning
-    elseif ($subscription_data && isset($subscription_data['usagePercentage']) && $subscription_data['usagePercentage'] >= 80 && $subscription_data['usagePercentage'] < 100) :
+    if ($subscription_data && isset($subscription_data['usagePercentage']) && $subscription_data['usagePercentage'] >= 80 && $subscription_data['usagePercentage'] < 100 && !isset($subscription_data['upgradeRequired'])) :
     ?>
     <div class="notice notice-warning">
         <p>
