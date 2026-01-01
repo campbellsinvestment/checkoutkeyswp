@@ -26,6 +26,75 @@ class CheckoutKeys_Admin {
         $this->db = CheckoutKeys_Database::get_instance();
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        add_action('wp_ajax_checkoutkeys_toggle_license', array($this, 'ajax_toggle_license'));
+    }
+    
+    public function ajax_toggle_license() {
+        check_ajax_referer('checkoutkeys_ajax', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Unauthorized'));
+        }
+        
+        $license_key = sanitize_text_field($_POST['license_key']);
+        $action = sanitize_text_field($_POST['toggle_action']);
+        $api_key = get_option('checkoutkeys_api_key');
+        $api_url = 'https://checkoutkeys.com/api';
+        
+        if (empty($api_key)) {
+            error_log('CheckoutKeys Toggle - API key not configured');
+            wp_send_json_error(array('message' => 'API key not configured'));
+        }
+        
+        if (!in_array($action, ['activate', 'deactivate'])) {
+            error_log('CheckoutKeys Toggle - Invalid action: ' . $action);
+            wp_send_json_error(array('message' => 'Invalid action'));
+        }
+        
+        error_log('CheckoutKeys Toggle - License: ' . $license_key . ' | Action: ' . $action);
+        
+        $response = wp_remote_post($api_url . '/licensekeys/activateDeactivate', array(
+            'headers' => array(
+                'Content-Type' => 'application/json',
+                'x-api-key' => $api_key,
+            ),
+            'body' => json_encode(array(
+                'licenseKey' => $license_key,
+                'action' => $action,
+            )),
+            'timeout' => 30,
+        ));
+        
+        if (is_wp_error($response)) {
+            $error_message = $response->get_error_message();
+            error_log('CheckoutKeys Toggle - Error: ' . $error_message);
+            wp_send_json_error(array('message' => 'Connection error: ' . $error_message));
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        
+        error_log('CheckoutKeys Toggle - Status Code: ' . $status_code);
+        error_log('CheckoutKeys Toggle - Response: ' . $body);
+        
+        if ($status_code === 200) {
+            $new_status = ($action === 'activate') ? 'active' : 'inactive';
+            $this->db->update_license($license_key, array('status' => $new_status));
+            
+            $action_word = ($action === 'activate') ? 'activated' : 'deactivated';
+            error_log('CheckoutKeys Toggle - Success: License ' . $action_word);
+            
+            wp_send_json_success(array(
+                'message' => sprintf('License key successfully %s', $action_word),
+                'new_status' => $new_status,
+                'new_action' => ($action === 'activate') ? 'deactivate' : 'activate',
+                'new_button_text' => ($action === 'activate') ? 'Deactivate' : 'Activate',
+                'new_button_class' => ($action === 'activate') ? 'deactivate-btn' : 'activate-btn'
+            ));
+        } else {
+            error_log('CheckoutKeys Toggle - Failed with status: ' . $status_code);
+            wp_send_json_error(array('message' => 'Failed to update license status'));
+        }
     }
     
     public function add_admin_menu() {

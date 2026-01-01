@@ -30,11 +30,6 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
             $status_code = wp_remote_retrieve_response_code($response);
             $data = json_decode($body, true);
             
-            // Debug logging
-            error_log('CheckoutKeys Sync - Status Code: ' . $status_code);
-            error_log('CheckoutKeys Sync - Response Body: ' . $body);
-            error_log('CheckoutKeys Sync - Decoded Data: ' . print_r($data, true));
-            
             if ($data && isset($data['licenses'])) {
                 $db = CheckoutKeys_Database::get_instance();
                 $synced = 0;
@@ -76,9 +71,11 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
                 }
                 
                 update_option('checkoutkeys_last_sync', current_time('mysql'));
-                echo '<div class="notice notice-success"><p>' . 
-                     sprintf(esc_html__('Successfully synced %d licenses from checkoutkeys.com', 'checkoutkeys'), $synced) . 
+                $license_word = ($synced === 1) ? 'license' : 'licenses';
+                echo '<div class="notice notice-success is-dismissible" id="checkoutkeys-sync-notice"><p>' . 
+                     sprintf(esc_html__('Successfully synced %d ' . $license_word . ' from checkoutkeys.com', 'checkoutkeys'), $synced) . 
                      '</p></div>';
+                echo '<script>setTimeout(function(){ var notice = document.getElementById("checkoutkeys-sync-notice"); if(notice) notice.style.display = "none"; }, 5000);</script>';
             } else {
                 echo '<div class="notice notice-error"><p>' . 
                      esc_html__('Invalid response from API. Status: ', 'checkoutkeys') . $status_code . 
@@ -136,6 +133,24 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
     
     <?php
     $api_key = get_option('checkoutkeys_api_key');
+    
+    // Fetch subscription status from CheckoutKeys API
+    $subscription_data = null;
+    if (!empty($api_key)) {
+        $api_url = 'https://checkoutkeys.com/api';
+        $response = wp_remote_get($api_url . '/subscription/status', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+            ),
+            'timeout' => 15,
+        ));
+        
+        if (!is_wp_error($response)) {
+            $body = wp_remote_retrieve_body($response);
+            $subscription_data = json_decode($body, true);
+        }
+    }
+    
     if (empty($api_key)) :
     ?>
     <div class="notice notice-warning">
@@ -148,13 +163,101 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
     </div>
     <?php endif; ?>
     
+    <?php
+    // Show upgrade notice if required
+    if ($subscription_data && isset($subscription_data['upgradeRequired']) && $subscription_data['upgradeRequired']) :
+    ?>
+    <div class="notice notice-error" style="border-left-color: #f0ad4e;">
+        <p>
+            <strong><?php esc_html_e('⚠️ Upgrade Required', 'checkoutkeys'); ?></strong><br>
+            <?php 
+            printf(
+                esc_html__('You\'ve reached the limit of your current %s plan (%d license keys). ', 'checkoutkeys'),
+                esc_html($subscription_data['plan']['name']),
+                intval($subscription_data['plan']['limit'])
+            );
+            ?>
+            <a href="https://checkoutkeys.com/pricing" target="_blank" class="button button-primary" style="margin-left: 10px;">
+                <?php esc_html_e('Upgrade Now', 'checkoutkeys'); ?>
+            </a>
+        </p>
+    </div>
+    <?php 
+    // Show approaching limit warning
+    elseif ($subscription_data && isset($subscription_data['usagePercentage']) && $subscription_data['usagePercentage'] >= 80 && $subscription_data['usagePercentage'] < 100) :
+    ?>
+    <div class="notice notice-warning">
+        <p>
+            <strong><?php esc_html_e('⚠️ Approaching Plan Limit', 'checkoutkeys'); ?></strong><br>
+            <?php 
+            printf(
+                esc_html__('You\'ve used %d%% of your %s plan limit. Consider upgrading to avoid service disruption.', 'checkoutkeys'),
+                intval($subscription_data['usagePercentage']),
+                esc_html($subscription_data['plan']['name'])
+            );
+            ?>
+            <a href="https://checkoutkeys.com/pricing" target="_blank" style="margin-left: 10px;">
+                <?php esc_html_e('View Plans', 'checkoutkeys'); ?>
+            </a>
+        </p>
+    </div>
+    <?php endif; ?>
+    
+    <?php if ($subscription_data && isset($subscription_data['plan'])) : ?>
+    <!-- Plan Card - Full Width -->
+    <div style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin: 20px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px;">
+            <div style="flex: 1; min-width: 250px;">
+                <h3 style="color: #23282d; font-size: 14px; margin: 0 0 10px 0; opacity: 0.7;"><?php esc_html_e('Current Plan', 'checkoutkeys'); ?></h3>
+                <p style="font-size: 28px; font-weight: bold; margin: 0; color: #0073aa;"><?php echo esc_html($subscription_data['plan']['name']); ?></p>
+                <p style="font-size: 14px; margin: 10px 0 0 0; color: #666;">
+                    <?php 
+                    if ($subscription_data['plan']['price'] > 0) {
+                        printf(esc_html__('$%d/month', 'checkoutkeys'), intval($subscription_data['plan']['price']));
+                    } else {
+                        esc_html_e('Free Forever', 'checkoutkeys');
+                    }
+                    ?>
+                </p>
+            </div>
+            <div style="flex: 2; min-width: 300px;">
+                <div style="font-size: 12px; color: #666; margin-bottom: 5px;"><?php esc_html_e('Usage', 'checkoutkeys'); ?></div>
+                <div style="font-size: 16px; font-weight: bold; color: #23282d; margin-bottom: 8px;">
+                    <?php echo esc_html($subscription_data['licenseKeysCount']); ?> / <?php echo esc_html($subscription_data['plan']['limit']); ?>
+                    <span style="font-size: 12px; font-weight: normal; color: #666;"><?php esc_html_e('keys', 'checkoutkeys'); ?></span>
+                </div>
+                <div style="width: 100%; height: 8px; background: #f0f0f1; border-radius: 4px; overflow: hidden;">
+                    <?php 
+                    $usage_pct = intval($subscription_data['usagePercentage']);
+                    $bar_color = '#0073aa'; // WordPress blue
+                    if ($usage_pct >= 100) {
+                        $bar_color = '#dc3232'; // WordPress red
+                    } elseif ($usage_pct >= 80) {
+                        $bar_color = '#f56e28'; // WordPress orange
+                    }
+                    $bar_width = min(100, $usage_pct);
+                    ?>
+                    <div style="height: 100%; background: <?php echo esc_attr($bar_color); ?>; border-radius: 4px; width: <?php echo esc_attr($bar_width); ?>%;"></div>
+                </div>
+            </div>
+            <?php if ($subscription_data['plan']['name'] === 'Free' || $subscription_data['usagePercentage'] >= 80) : ?>
+            <div>
+                <a href="https://checkoutkeys.com/pricing" target="_blank" class="button button-primary">
+                    <?php esc_html_e('Upgrade Plan', 'checkoutkeys'); ?>
+                </a>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
+    
     <div class="checkoutkeys-stats" style="margin: 20px 0;">
         <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-            <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px;">
+            <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <h3><?php esc_html_e('Total Licenses', 'checkoutkeys'); ?></h3>
                 <p style="font-size: 32px; font-weight: bold; margin: 10px 0;"><?php echo esc_html($this->db->get_license_count()); ?></p>
             </div>
-            <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px;">
+            <div class="stat-card" style="background: #fff; padding: 20px; border: 1px solid #ddd; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                 <h3><?php esc_html_e('Active', 'checkoutkeys'); ?></h3>
                 <p style="font-size: 32px; font-weight: bold; margin: 10px 0; color: #46b450;">
                     <?php 
@@ -193,12 +296,13 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
     <table class="wp-list-table widefat fixed striped">
         <thead>
             <tr>
-                <th><?php esc_html_e('License Key', 'checkoutkeys'); ?></th>
-                <th><?php esc_html_e('Customer', 'checkoutkeys'); ?></th>
-                <th><?php esc_html_e('Status', 'checkoutkeys'); ?></th>
-                <th><?php esc_html_e('Created At', 'checkoutkeys'); ?></th>
-                <th><?php esc_html_e('Updated At', 'checkoutkeys'); ?></th>
-                <th><?php esc_html_e('Email Sent At', 'checkoutkeys'); ?></th>
+                <th style="width: 15%;"><?php esc_html_e('License Key', 'checkoutkeys'); ?></th>
+                <th style="width: 20%;"><?php esc_html_e('Customer', 'checkoutkeys'); ?></th>
+                <th style="width: 10%;"><?php esc_html_e('Status', 'checkoutkeys'); ?></th>
+                <th style="width: 15%;"><?php esc_html_e('Created At', 'checkoutkeys'); ?></th>
+                <th style="width: 15%;"><?php esc_html_e('Updated At', 'checkoutkeys'); ?></th>
+                <th style="width: 15%;"><?php esc_html_e('Email Sent At', 'checkoutkeys'); ?></th>
+                <th style="width: 10%; text-align: right;"><?php esc_html_e('Actions', 'checkoutkeys'); ?></th>
             </tr>
         </thead>
         <tbody>
@@ -222,11 +326,20 @@ if (isset($_POST['checkoutkeys_sync']) && check_admin_referer('checkoutkeys_sync
                         <td><?php echo esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->created_at))); ?></td>
                         <td><?php echo (property_exists($license, 'updated_at') && $license->updated_at) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->updated_at))) : '<span style="color: #999;">—</span>'; ?></td>
                         <td><?php echo (property_exists($license, 'email_sent_at') && $license->email_sent_at) ? esc_html(date_i18n(get_option('date_format') . ' ' . get_option('time_format'), strtotime($license->email_sent_at))) : '<span style="color: #999;">—</span>'; ?></td>
+                        <td style="text-align: right;">
+                            <button type="button" 
+                                    class="button button-small toggle-license-btn <?php echo ($license->status === 'active') ? 'deactivate-btn' : 'activate-btn'; ?>"
+                                    data-license-key="<?php echo esc_attr($license->license_key); ?>"
+                                    data-action="<?php echo ($license->status === 'active') ? 'deactivate' : 'activate'; ?>"
+                                    style="background: <?php echo ($license->status === 'active') ? '#dc3232' : '#46b450'; ?>; color: white; border-color: <?php echo ($license->status === 'active') ? '#dc3232' : '#46b450'; ?>;">
+                                <?php echo ($license->status === 'active') ? esc_html__('Deactivate', 'checkoutkeys') : esc_html__('Activate', 'checkoutkeys'); ?>
+                            </button>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             <?php else : ?>
                 <tr>
-                    <td colspan="6"><?php esc_html_e('No license keys found.', 'checkoutkeys'); ?></td>
+                    <td colspan="7"><?php esc_html_e('No license keys found.', 'checkoutkeys'); ?></td>
                 </tr>
             <?php endif; ?>
         </tbody>
@@ -260,4 +373,66 @@ function copyToClipboard(text, element) {
         }
     }, 1500);
 }
+
+// Handle toggle license status
+jQuery(document).ready(function($) {
+    $('.toggle-license-btn').on('click', function() {
+        var button = $(this);
+        var licenseKey = button.data('license-key');
+        var action = button.data('action');
+        var row = button.closest('tr');
+        var statusCell = row.find('.license-status');
+        
+        // Disable button and show loading
+        button.prop('disabled', true);
+        var originalText = button.text();
+        button.text('...');
+        
+        $.ajax({
+            url: ajaxurl,
+            method: 'POST',
+            data: {
+                action: 'checkoutkeys_toggle_license',
+                license_key: licenseKey,
+                toggle_action: action,
+                nonce: '<?php echo wp_create_nonce('checkoutkeys_ajax'); ?>'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Update status badge
+                    statusCell.removeClass('status-active status-inactive');
+                    statusCell.addClass('status-' + response.data.new_status);
+                    statusCell.text(response.data.new_status.charAt(0).toUpperCase() + response.data.new_status.slice(1));
+                    
+                    // Update button
+                    button.data('action', response.data.new_action);
+                    button.text(response.data.new_button_text);
+                    button.removeClass('activate-btn deactivate-btn');
+                    button.addClass(response.data.new_button_class);
+                    
+                    // Update button colors
+                    var newColor = (response.data.new_action === 'deactivate') ? '#dc3232' : '#46b450';
+                    button.css({
+                        'background': newColor,
+                        'border-color': newColor
+                    });
+                    
+                    // Show success message
+                    var notice = $('<div class="notice notice-success is-dismissible" style="margin: 10px 0;"><p>' + response.data.message + '</p></div>');
+                    $('.wrap > h1').after(notice);
+                    setTimeout(function() { notice.fadeOut(); }, 3000);
+                } else {
+                    alert('Error: ' + response.data.message);
+                    button.text(originalText);
+                }
+                button.prop('disabled', false);
+            },
+            error: function() {
+                alert('Failed to update license status. Please try again.');
+                button.text(originalText);
+                button.prop('disabled', false);
+            }
+        });
+    });
+});
 </script>

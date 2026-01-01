@@ -42,9 +42,10 @@ if (file_exists($log_file)) {
             $timestamp = $matches[1];
             $message = $matches[2];
             
-            // Skip verbose HTML responses
+            // Skip verbose HTML responses and sync data dumps
             if (stripos($message, '<!DOCTYPE') !== false || 
                 stripos($message, '<html') !== false ||
+                stripos($message, 'Decoded Data:') !== false ||
                 strlen($message) > 500) {
                 continue;
             }
@@ -89,13 +90,15 @@ if (isset($_POST['checkoutkeys_clear_logs']) && check_admin_referer('checkoutkey
 ?>
 
 <div class="wrap">
-    <h1><?php esc_html_e('Logs', 'checkoutkeys'); ?></h1>
+    <h1 style="display: flex; align-items: center; gap: 10px;">
+        <img src="<?php echo esc_url(plugins_url('assets/favicon.ico', dirname(__FILE__))); ?>" alt="CheckoutKeys" style="width: 24px; height: 24px;">
+        <?php esc_html_e('CheckoutKeys Logs', 'checkoutkeys'); ?>
+    </h1>
     
     <div class="card" style="max-width: 100%;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <div>
-                <h2 style="margin: 0;"><?php esc_html_e('CheckoutKeys Activity', 'checkoutkeys'); ?></h2>
-                <p class="description" style="margin: 5px 0 0 0;">
+                <p class="description" style="margin: 0;">
                     <?php esc_html_e('Showing CheckoutKeys API activity (last 25 entries)', 'checkoutkeys'); ?>
                 </p>
             </div>
