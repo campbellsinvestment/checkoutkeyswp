@@ -17,24 +17,49 @@ if (isset($_POST['checkoutkeys_save_settings']) && check_admin_referer('checkout
     
     // Validate API key before saving
     if (!empty($api_key)) {
+        error_log('CheckoutKeys: Validating API key with URL: ' . $api_url . '/licenses');
+        error_log('CheckoutKeys: API key length: ' . strlen($api_key));
+        
         $response = wp_remote_get($api_url . '/licenses', array(
             'headers' => array(
                 'x-api-key' => $api_key,
             ),
             'timeout' => 15,
+            'sslverify' => true,
         ));
         
         if (!is_wp_error($response)) {
             $status_code = wp_remote_retrieve_response_code($response);
+            $response_body = wp_remote_retrieve_body($response);
+            
+            error_log('CheckoutKeys: Response status: ' . $status_code);
+            error_log('CheckoutKeys: Response body: ' . substr($response_body, 0, 200));
+            
             if ($status_code === 200) {
                 update_option('checkoutkeys_api_key', $api_key);
                 update_option('checkoutkeys_api_url', $api_url);
                 echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__('Settings saved successfully. API key is valid.', 'checkoutkeys') . '</p></div>';
             } else {
-                echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__('Invalid API key. Settings not saved.', 'checkoutkeys') . '</p></div>';
+                // Save anyway but warn user
+                update_option('checkoutkeys_api_key', $api_key);
+                update_option('checkoutkeys_api_url', $api_url);
+                
+                $error_data = json_decode($response_body, true);
+                $error_message = isset($error_data['message']) ? $error_data['message'] : 'Unknown error';
+                echo '<div class="notice notice-warning is-dismissible"><p>' . 
+                     sprintf(esc_html__('Settings saved, but API key validation returned status %d: %s. If the key is correct, you can ignore this warning.', 'checkoutkeys'), $status_code, esc_html($error_message)) . 
+                     '</p></div>';
             }
         } else {
-            echo '<div class="notice notice-error is-dismissible"><p>' . esc_html__('Could not verify API key. Please check your connection.', 'checkoutkeys') . '</p></div>';
+            // Save anyway but warn user
+            update_option('checkoutkeys_api_key', $api_key);
+            update_option('checkoutkeys_api_url', $api_url);
+            
+            $error_message = $response->get_error_message();
+            error_log('CheckoutKeys: WP Error: ' . $error_message);
+            echo '<div class="notice notice-warning is-dismissible"><p>' . 
+                 sprintf(esc_html__('Settings saved, but could not verify API key due to connection error: %s. If the key is correct, you can ignore this warning.', 'checkoutkeys'), esc_html($error_message)) . 
+                 '</p></div>';
         }
     } else {
         // Allow clearing the API key
