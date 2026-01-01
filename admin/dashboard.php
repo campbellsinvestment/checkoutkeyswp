@@ -256,14 +256,20 @@ $upgrade_required = ($subscription_data && isset($subscription_data['upgradeRequ
                     <?php 
                     if ($subscription_data['plan']['price'] > 0) {
                         printf(esc_html__('$%d/month', 'checkoutkeys'), intval($subscription_data['plan']['price']));
-                    } else {
-                        esc_html_e('Free Forever', 'checkoutkeys');
                     }
                     ?>
                 </p>
             </div>
             <div style="flex: 2; min-width: 300px;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 5px;"><?php esc_html_e('Usage', 'checkoutkeys'); ?></div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                    <?php 
+                    if ($subscription_data['plan']['price'] > 0) {
+                        esc_html_e('Usage', 'checkoutkeys');
+                    } else {
+                        esc_html_e('This Month\'s Usage', 'checkoutkeys');
+                    }
+                    ?>
+                </div>
                 <div style="font-size: 16px; font-weight: bold; color: #23282d; margin-bottom: 8px;">
                     <?php echo esc_html($subscription_data['licenseKeysCount']); ?> / <?php echo esc_html($subscription_data['plan']['limit']); ?>
                     <span style="font-size: 12px; font-weight: normal; color: #666;"><?php esc_html_e('keys', 'checkoutkeys'); ?></span>
